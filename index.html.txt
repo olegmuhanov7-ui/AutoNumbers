@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AutoNumbers</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: radial-gradient(circle at 50% 30%, #1a1a2e 0%, #0a0a14 70%);
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bg-particles {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+  }
+
+  .bg-particles span {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    opacity: 0.4;
+    animation: float linear infinite;
+  }
+
+  @keyframes float {
+    0%   { transform: translateY(100vh) scale(0); opacity: 0; }
+    10%  { opacity: 0.6; }
+    90%  { opacity: 0.6; }
+    100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+  }
+
+  .glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(79, 195, 247, 0.15) 0%, transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+    transition: background 0.5s;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 420px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    background: linear-gradient(90deg, #4fc3f7, #b388ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    color: #666;
+    margin-top: -14px;
+    text-align: center;
+  }
+
+  /* Барабан */
+  .reel {
+    width: 100%;
+    height: 130px;
+    background: linear-gradient(180deg, #12121f 0%, #1c1c2e 50%, #12121f 100%);
+    border: 2px solid #2a2a40;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 30px rgba(0,0,0,0.6), 0 0 40px rgba(79,195,247,0.1);
+    transition: box-shadow 0.4s, border-color 0.4s;
+  }
+
+  .reel::before,
+  .reel::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 40px;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .reel::before {
+    top: 0;
+    background: linear-gradient(180deg, #0a0a14 0%, transparent 100%);
+  }
+
+  .reel::after {
+    bottom: 0;
+    background: linear-gradient(0deg, #0a0a14 0%, transparent 100%);
+  }
+
+  /* Сам номер как госномер */
+  .plate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-family: 'Arial', sans-serif;
+    font-weight: 700;
+    transition: transform 0.2s;
+  }
+
+  .plate .main {
+    font-size: 38px;
+    letter-spacing: 2px;
+    color: #fff;
+    text-shadow: 0 0 20px rgba(255,255,255,0.3);
+  }
+
+  .plate .region {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-left: 2px solid rgba(255,255,255,0.3);
+    padding-left: 6px;
+    margin-left: 2px;
+  }
+
+  .plate .region .flag {
+    font-size: 8px;
+    line-height: 1;
+    color: #fff;
+    opacity: 0.8;
+  }
+
+  .plate .region .code {
+    font-size: 16px;
+    line-height: 1;
+    color: #fff;
+  }
+
+  .number-display.spinning {
+    animation: shake 0.08s linear infinite;
+  }
+
+  @keyframes shake {
+    0%   { transform: translateY(-8px); }
+    50%  { transform: translateY(8px); }
+    100% { transform: translateY(-8px); }
+  }
+
+  .number-display.win {
+    animation: pop 0.5s ease;
+  }
+
+  @keyframes pop {
+    0%   { transform: scale(0.7); }
+    60%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+
+  /* Редкость */
+  .rarity-badge {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 10px;
+    border-radius: 8px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 3;
+  }
+
+  .rarity-badge.show {
+    opacity: 1;
+  }
+
+  /* Кнопка крутки */
+  .spin-btn {
+    width: 100%;
+    padding: 18px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #0a0a14;
+    background: linear-gradient(90deg, #4fc3f7, #b388ff);
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 6px 24px rgba(79, 195, 247, 0.4);
+  }
+
+  .spin-btn:active:not(:disabled) {
+    transform: scale(0.97);
+    box-shadow: 0 3px 12px rgba(79, 195, 247, 0.4);
+  }
+
+  .spin-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* Кнопки действий */
+  .actions {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s;
+    pointer-events: none;
+  }
+
+  .actions.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .actions button {
+    flex: 1;
+    padding: 16px;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .actions button:active {
+    transform: scale(0.96);
+  }
+
+  .btn-save {
+    background: linear-gradient(90deg, #00e676, #00c853);
+    color: #0a0a14;
+    box-shadow: 0 4px 18px rgba(0, 230, 118, 0.35);
+  }
+
+  .btn-sell {
+    background: linear-gradient(90deg, #ff9100, #ff6d00);
+    color: #0a0a14;
+    box-shadow: 0 4px 18px rgba(255, 145, 0, 0.35);
+  }
+
+  /* Баланс */
+  .balance {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid #2a2a40;
+    border-radius: 14px;
+    font-size: 13px;
+    color: #888;
+  }
+
+  .balance b {
+    color: #4fc3f7;
+    font-size: 15px;
+  }
+
+  /* Коллекция */
+  .collection {
+    width: 100%;
+  }
+
+  .collection-title {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .collection-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 110px;
+    overflow-y: auto;
+  }
+
+  .collection-list::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .collection-list::-webkit-scrollbar-thumb {
+    background: #2a2a40;
+    border-radius: 2px;
+  }
+
+  .chip {
+    padding: 5px 9px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    color: #ccc;
+    white-space: nowrap;
+  }
+
+  .chip.rarity-uncommon { border-color: #4fc3f7; color: #4fc3f7; }
+  .chip.rarity-rare     { border-color: #b388ff; color: #b388ff; }
+  .chip.rarity-epic     { border-color: #ff4081; color: #ff4081; }
+  .chip.rarity-legend   { border-color: #ffd600; color: #ffd600; box-shadow: 0 0 8px rgba(255,214,0,0.4); }
+
+  .empty {
+    font-size: 13px;
+    color: #444;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-particles" id="particles"></div>
+<div class="glow" id="glow"></div>
+
+<div class="app">
+  <div>
+    <div class="title">AUTO NUMBERS</div>
+    <div class="subtitle">крути · сохраняй · продавай</div>
+  </div>
+
+  <div class="balance">
+    <span>Баланс: <b id="balance">0</b> ₽</span>
+    <span>Сохранено: <b id="savedCount">0</b></span>
+  </div>
+
+  <div class="reel" id="reel">
+    <div class="rarity-badge" id="rarityBadge"></div>
+    <div class="number-display" id="display">
+      <div class="plate">
+        <span class="main">А123ВС</span>
+        <span class="region">
+          <span class="flag">RUS</span>
+          <span class="code">77</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <button class="spin-btn" id="spinBtn">КРУТИТЬ</button>
+
+  <div class="actions" id="actions">
+    <button class="btn-save" id="saveBtn">💾 Сохранить</button>
+    <button class="btn-sell" id="sellBtn">💰 Продать</button>
+  </div>
+
+  <div class="collection">
+    <div class="collection-title">Моя коллекция</div>
+    <div class="collection-list" id="collection">
+      <span class="empty">Пока пусто</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== Telegram WebApp =====
+  const tg = window.Telegram?.WebApp;
+  if (tg) {
+    tg.ready();
+    tg.expand();
+  }
+
+  // ===== Константы =====
+  const STORAGE_KEY = 'autonumbers_state_v2';
+  const ALLOWED_LETTERS = ['А', 'В', 'Е', 'К', 'М', 'Н', 'О', 'Р', 'С', 'Т', 'У', 'Х'];
+  const REGIONS = [
+    '77', '99', '97', '177', '199', '197',
+    '50', '90', '150', '190', '98', '178',
+    '78', '47', '23', '161', '61', '34',
+    '36', '52', '66', '74', '102', '116',
+    '123', '124', '125', '126', '134', '136',
+    '138', '142', '152', '154', '156', '159',
+    '164', '166', '173', '174', '175', '176',
+    '179', '182', '186', '187', '188', '189',
+    '191', '192', '193', '194', '195', '196',
+    '198'
+  ];
+  const PREMIUM_REGIONS = ['77', '99', '97', '177', '199', '197'];
+
+  // ===== Состояние =====
+  let state = {
+    balance: 0,
+    savedNumbers: [],
+    currentNumber: null,
+    currentPrice: 0,
+    currentRarity: null
+  };
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) state = { ...state, ...JSON.parse(raw) };
+    } catch (e) { console.warn('load error', e); }
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        balance: state.balance,
+        savedNumbers: state.savedNumbers
+      }));
+    } catch (e) { console.warn('save error', e); }
+  }
+
+  // ===== Генерация =====
+  function generateNumber() {
+    const rand = (max) => Math.floor(Math.random() * max);
+    const randLetter = () => ALLOWED_LETTERS[rand(ALLOWED_LETTERS.length)];
+    const randDigit = () => rand(10);
+
+    const letter1 = randLetter();
+    const digits = `${randDigit()}${randDigit()}${randDigit()}`;
+    const letter2 = randLetter();
+    const letter3 = randLetter();
+    const region = REGIONS[rand(REGIONS.length)];
+
+    return `${letter1}${digits}${letter2}${letter3} ${region}`;
+  }
+
+  function isUnique(number) {
+    return !state.savedNumbers.includes(number);
+  }
+
+  function getUniqueNumber() {
+    for (let i = 0; i < 200; i++) {
+      const num = generateNumber();
+      if (isUnique(num)) return num;
+    }
+    return null;
+  }
+
+  // ===== Оценка =====
+  function calculatePrice(number) {
+    const match = number.match(/^([А-Я])(\d{3})([А-Я]{2})\s(\d{2,3})$/);
+    if (!match) return { price: 10, rarity: 'common' };
+
+    const [, letter1, digits, letters23, region] = match;
+    const allLetters = letter1 + letters23;
+    const digitArr = digits.split('').map(Number);
+
+    let price = 50;
+    let score = 0;
+
+    // Повтор букв
+    if (letters23[0] === letters23[1]) { price += 200; score += 2; }
+    if (letter1 === letters23[0]) { price += 150; score += 1; }
+
+    // Повтор цифр
+    if (digits[0] === digits[1] && digits[1] === digits[2]) {
+      price += 500; score += 4;
+    } else if (digits[0] === digits[1] || digits[1] === digits[2] || digits[0] === digits[2]) {
+      price += 100; score += 1;
+    }
+
+    // Последовательности
+    if (digitArr[1] - digitArr[0] === 1 && digitArr[2] - digitArr[1] === 1) {
+      price += 300; score += 2;
+    }
+    if (digitArr[0] - digitArr[1] === 1 && digitArr[1] - digitArr[2] === 1) {
+      price += 300; score += 2;
+    }
+
+    // Круглые
+    if (['001', '100', '700'].includes(digits)) { price += 250; score += 2; }
+
+    // Зеркальные буквы
+    if (letter1 === letters23[1]) { price += 150; score += 1; }
+
+    // Премиум регион
+    if (PREMIUM_REGIONS.includes(region)) { price += 100; score += 1; }
+
+    // Все буквы одинаковые (ААА) — легендарно
+    if (allLetters[0] === allLetters[1] && allLetters[1] === allLetters[2]) {
+      price += 1000; score += 5;
+    }
+
+    // Легендарные серии
+    const LEGENDARY = ['АМР', 'ЕКХ', 'АМО', 'СОО', 'ООО', 'КОО', 'ВОО', 'МММ', 'ХКХ'];
+    if (LEGENDARY.includes(allLetters)) { price += 2000; score += 6; }
+
+    // Определяем редкость
+    let rarity = 'common';
+    if (score >= 7) rarity = 'legendary';
+    else if (score >= 4) rarity = 'epic';
+    else if (score >= 2) rarity = 'rare';
+    else if (score >= 1) rarity = 'uncommon';
+
+    return { price, rarity };
+  }
+
+  // ===== UI =====
+  const display = document.getElementById('display');
+  const reel = document.getElementById('reel');
+  const glow = document.getElementById('glow');
+  const rarityBadge = document.getElementById('rarityBadge');
+  const spinBtn = document.getElementById('spinBtn');
+  const actions = document.getElementById('actions');
+  const saveBtn = document.getElementById('saveBtn');
+  const sellBtn = document.getElementById('sellBtn');
+  const balanceEl = document.getElementById('balance');
+  const savedCountEl = document.getElementById('savedCount');
+  const collectionEl = document.getElementById('collection');
+
+  const RARITY_STYLES = {
+    common:    { label: '',            color: '#888',    glow: 'rgba(79,195,247,0.15)' },
+    uncommon:  { label: 'Необычный',   color: '#4fc3f7', glow: 'rgba(79,195,247,0.25)' },
+    rare:      { label: 'Редкий',      color: '#b388ff', glow: 'rgba(179,136,255,0.3)' },
+    epic:      { label: 'Эпический',   color: '#ff4081', glow: 'rgba(255,64,129,0.35)' },
+    legendary: { label: 'Легендарный', color: '#ffd600', glow: 'rgba(255,214,0,0.4)' }
+  };
+
+  function renderPlate(number) {
+    const match = number.match(/^([А-Я])(\d{3})([А-Я]{2})\s(\d{2,3})$/);
+    if (!match) return `<span class="main">${number}</span>`;
+    const [, l1, d, l23, region] = match;
+    return `
+      <div class="plate">
+        <span class="main">${l1}${d}${l23}</span>
+        <span class="region">
+          <span class="flag">RUS</span>
+          <span class="code">${region}</span>
+        </span>
+      </div>
+    `;
+  }
+
+  function setReelColor(rarity) {
+    const style = RARITY_STYLES[rarity] || RARITY_STYLES.common;
+    reel.style.borderColor = style.color + '66';
+    reel.style.boxShadow = `inset 0 0 30px rgba(0,0,0,0.6), 0 0 40px ${style.glow}`;
+    glow.style.background = `radial-gradient(circle, ${style.glow} 0%, transparent 70%)`;
+
+    if (style.label) {
+      rarityBadge.textContent = style.label;
+      rarityBadge.style.color = style.color;
+      rarityBadge.style.background = style.color + '22';
+      rarityBadge.classList.add('show');
+    } else {
+      rarityBadge.classList.remove('show');
+    }
+  }
+
+  function resetReelColor() {
+    reel.style.borderColor = '#2a2a40';
+    reel.style.boxShadow = 'inset 0 0 30px rgba(0,0,0,0.6), 0 0 40px rgba(79,195,247,0.1)';
+    glow.style.background = 'radial-gradient(circle, rgba(79, 195, 247, 0.15) 0%, transparent 70%)';
+    rarityBadge.classList.remove('show');
+  }
+
+  function updateUI() {
+    balanceEl.textContent = state.balance;
+    savedCountEl.textContent = state.savedNumbers.length;
+
+    if (state.savedNumbers.length === 0) {
+      collectionEl.innerHTML = '<span class="empty">Пока пусто</span>';
+    } else {
+      collectionEl.innerHTML = state.savedNumbers
+        .map(n => {
+          const { rarity } = calculatePrice(n);
+          return `<span class="chip rarity-${rarity}">${n}</span>`;
+        })
+        .join('');
+    }
+  }
+
+  // ===== Крутка =====
+  let spinning = false;
+
+  function spin() {
+    if (spinning) return;
+
+    const finalNumber = getUniqueNumber();
+    if (!finalNumber) {
+      tg?.showAlert?.('Все номера закончились!') || alert('Все номера закончились!');
+      return;
+    }
+
+    spinning = true;
+    spinBtn.disabled = true;
+    actions.classList.remove('show');
+    state.currentNumber = null;
+    state.currentPrice = 0;
+    resetReelColor();
+
+    display.classList.add('spinning');
+    display.classList.remove('win');
+
+    const spinDuration = 1800;
+    const startTime = Date.now();
+    const interval = 60;
+
+    const spinTimer = setInterval(() => {
+      display.innerHTML = renderPlate(generateNumber());
+
+      if (Date.now() - startTime > spinDuration) {
+        clearInterval(spinTimer);
+        finishSpin(finalNumber);
+      }
+    }, interval);
+  }
+
+  function finishSpin(number) {
+    const { price, rarity } = calculatePrice(number);
+
+    display.classList.remove('spinning');
+    display.innerHTML = renderPlate(number);
+    display.classList.add('win');
+
+    setReelColor(rarity);
+
+    state.currentNumber = number;
+    state.currentPrice = price;
+    state.currentRarity = rarity;
+
+    spinning = false;
+    spinBtn.disabled = false;
+    actions.classList.add('show');
+
+    tg?.HapticFeedback?.impactOccurred?.(rarity === 'legendary' ? 'heavy' : 'medium');
+  }
+
+  // ===== Действия =====
+  function saveNumber() {
+    if (!state.currentNumber) return;
+
+    state.savedNumbers.push(state.currentNumber);
+    state.currentNumber = null;
+    state.currentPrice = 0;
+    state.currentRarity = null;
+
+    saveState();
+    updateUI();
+
+    actions.classList.remove('show');
+    display.classList.remove('win');
+    display.innerHTML = renderPlate('А123ВС 77');
+    resetReelColor();
+
+    tg?.HapticFeedback?.notificationOccurred?.('success');
+  }
+
+  function sellNumber() {
+    if (!state.currentNumber) return;
+
+    const price = state.currentPrice;
+    state.balance += price;
+    state.currentNumber = null;
+    state.currentPrice = 0;
+    state.currentRarity = null;
+
+    saveState();
+    updateUI();
+
+    actions.classList.remove('show');
+    display.classList.remove('win');
+    display.innerHTML = renderPlate('А123ВС 77');
+    resetReelColor();
+
+    tg?.HapticFeedback?.notificationOccurred?.('success');
+
+    const msg = `Продано за ${price} ₽`;
+    if (tg?.showAlert) tg.showAlert(msg);
+  }
+
+  // ===== Частицы =====
+  function createParticles() {
+    const container = document.getElementById('particles');
+    const colors = ['#4fc3f7', '#b388ff', '#00e676'];
+
+    for (let i = 0; i < 30; i++) {
+      const span = document.createElement('span');
+      span.style.left = Math.random() * 100 + '%';
+      span.style.animationDuration = (8 + Math.random() * 12) + 's';
+      span.style.animationDelay = (Math.random() * 10) + 's';
+      span.style.opacity = 0.2 + Math.random() * 0.4;
+      span.style.background = colors[Math.floor(Math.random() * colors.length)];
+      container.appendChild(span);
+    }
+  }
+
+  // ===== Init =====
+  function init() {
+    loadState();
+    updateUI();
+    createParticles();
+    display.innerHTML = renderPlate('А123ВС 77');
+
+    spinBtn.addEventListener('click', spin);
+    saveBtn.addEventListener('click', saveNumber);
+    sellBtn.addEventListener('click', sellNumber);
+  }
+
+  init();
+</script>
+</body>
+</html>
